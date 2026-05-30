@@ -1055,31 +1055,22 @@ function getApiKey(){ return localStorage.getItem(APIKEY_STORAGE)||''; }
 function saveApiKey(k){ localStorage.setItem(APIKEY_STORAGE,k.trim()); }
 
 function checkApiKeyOnLoad(){
-  setTimeout(()=>{
-    const key=getApiKey();
-    if(!key){
-      updateAPIStatus('offline');
-      // Hanya tampil banner jika di dashboard
-      if(document.getElementById('screen-dashboard')?.classList.contains('active')){
-        showApiKeyBanner();
-      }
-    } else {
-      // Key ada — langsung ping tanpa tampil banner dulu
-      pingClaudeAPI(key);
-    }
-  }, 800);
+  const key=getApiKey();
+  if(!key){
+    // Belum ada API key — tampilkan banner
+    showApiKeyBanner();
+    updateAPIStatus('offline');
+  } else {
+    pingClaudeAPI(key);
+  }
 }
 
-let _bannerDismissed=false; // track jika user pernah dismiss
-
 function showApiKeyBanner(){
-  // Jangan tampil lagi kalau sudah pernah di-dismiss manual
-  if(_bannerDismissed) return;
   const existing=document.getElementById('apikey-banner');
-  if(existing){ existing.style.display='block'; return; }
+  if(existing){ existing.style.display='flex'; return; }
   const banner=document.createElement('div');
   banner.id='apikey-banner';
-  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#13161d;border-top:2px solid #3b7ef8;padding:14px 16px;font-family:Sora,sans-serif;box-shadow:0 -4px 20px rgba(0,0,0,.4);display:block';
+  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#13161d;border-top:2px solid #3b7ef8;padding:14px 16px;font-family:Sora,sans-serif;box-shadow:0 -4px 20px rgba(0,0,0,.4)';
   banner.innerHTML=`
     <div style="max-width:480px;margin:0 auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1087,7 +1078,7 @@ function showApiKeyBanner(){
           <div style="font-size:13px;font-weight:700;color:#e8eaf0">🔑 Isi Groq API Key (GRATIS) untuk aktifkan IMEI & Phone Lookup</div>
           <div style="font-size:11px;color:#8b91a8;margin-top:2px">Daftar gratis di console.groq.com — tidak perlu kartu kredit</div>
         </div>
-        <button onclick="dismissApiKeyBanner()" style="background:none;border:none;color:#4d5368;cursor:pointer;font-size:20px;padding:0 4px;flex-shrink:0">✕</button>
+        <button onclick="document.getElementById('apikey-banner').style.display='none'" style="background:none;border:none;color:#4d5368;cursor:pointer;font-size:20px;padding:0 4px;flex-shrink:0">✕</button>
       </div>
       <div style="display:flex;gap:8px">
         <input type="password" id="banner-apikey-input" placeholder="gsk_..." style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #3b7ef8;background:#1a1e28;color:#e8eaf0;font-size:12px;font-family:Space Mono,monospace;outline:none"/>
@@ -1100,18 +1091,6 @@ function showApiKeyBanner(){
     </div>
   `;
   document.body.appendChild(banner);
-}
-
-function dismissApiKeyBanner(){
-  _bannerDismissed=true;
-  const b=document.getElementById('apikey-banner');
-  if(b) b.style.display='none';
-}
-
-function hideApiKeyBanner(){
-  const b=document.getElementById('apikey-banner');
-  if(b) b.style.display='none';
-  _bannerDismissed=true;
 }
 
 async function bannerSaveApiKey(){
@@ -1129,28 +1108,22 @@ async function bannerSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
     if(r.ok){
       apiMode='online'; updateAPIStatus('online');
       res.style.color='#22d3a3';
       res.textContent='✅ Groq API Key valid! IMEI & Phone Lookup siap digunakan.';
-      setTimeout(()=>hideApiKeyBanner(), 1500);
+      setTimeout(()=>{ const b=document.getElementById('apikey-banner'); if(b) b.style.display='none'; },2000);
     } else if(r.status===401){
-      res.style.color='#f45c5c';
-      res.textContent='❌ Key ditolak (401). Pastikan key sudah benar dan aktif.';
+      res.style.color='#f45c5c'; res.textContent='❌ Key ditolak (401). Pastikan key sudah benar.';
     } else {
-      res.style.color='#22d3a3';
-      res.textContent='✅ Tersimpan.';
+      res.style.color='#22d3a3'; res.textContent='✅ Tersimpan. Coba lakukan pencarian.';
       apiMode='online'; updateAPIStatus('online');
-      setTimeout(()=>hideApiKeyBanner(), 1500);
     }
   }catch(e){
-    // CORS/network error — key mungkin valid, simpan saja
-    res.style.color='#f4a941';
-    res.textContent='⚠️ Tersimpan. Koneksi test gagal — coba lakukan pencarian.';
+    res.style.color='#f4a941'; res.textContent='⚠️ Tersimpan. Tidak bisa test sekarang ('+e.message+').';
     apiMode='online'; updateAPIStatus('online');
-    setTimeout(()=>hideApiKeyBanner(), 2000);
   }
 }
 
@@ -1160,30 +1133,11 @@ async function pingClaudeAPI(key){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
-    if(r.ok){
-      updateAPIStatus('online'); apiMode='online';
-      hideApiKeyBanner(); // sembunyikan banner jika ping sukses
-    } else if(r.status===401){
-      updateAPIStatus('offline'); apiMode='offline';
-      // Key tidak valid — tampil banner untuk isi ulang
-      _bannerDismissed=false;
-      showApiKeyBanner();
-    } else {
-      // Status lain (rate limit dll) — anggap online
-      updateAPIStatus('online'); apiMode='online';
-      hideApiKeyBanner();
-    }
-  }catch(e){
-    // Network error / CORS — jika key ada, anggap online
-    if(key){
-      updateAPIStatus('online'); apiMode='online';
-      hideApiKeyBanner();
-    } else {
-      updateAPIStatus('offline'); apiMode='offline';
-    }
-  }
+    if(r.ok||r.status===400){ updateAPIStatus('online'); apiMode='online'; }
+    else{ updateAPIStatus('offline'); apiMode='offline'; showApiKeyBanner(); }
+  }catch(e){ updateAPIStatus('offline'); apiMode='offline'; }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1193,10 +1147,9 @@ async function pingClaudeAPI(key){
 async function claudeRaw(messages, tools, system, maxTok=1500){
   const key=getApiKey();
   if(!key){ updateAPIStatus('offline'); apiMode='offline'; showApiKeyBanner(); throw new Error('API Key belum diisi'); }
-  if(!key.startsWith('gsk_')){ updateAPIStatus('offline'); _bannerDismissed=false; showApiKeyBanner(); throw new Error('Format API Key salah'); }
   const sysMsg=system?[{role:'system',content:system}]:[];
   const body={
-    model:'llama3-8b-8192',
+    model:'llama-3.3-70b-versatile',
     max_tokens:maxTok,
     messages:[...sysMsg,...messages]
   };
@@ -1454,30 +1407,6 @@ const TAC_DB = {
   '35300111':{b:'Apple',m:'iPhone 13 mini',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '35337110':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '35337111':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  // iPhone 12 Series
-  '35227110':{b:'Apple',m:'iPhone 12 Pro Max',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35227111':{b:'Apple',m:'iPhone 12 Pro',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35228110':{b:'Apple',m:'iPhone 12',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35228111':{b:'Apple',m:'iPhone 12 mini',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // iPhone 11 Series — TAC resmi dari GSMA
-  '35399410':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35399411':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['4G LTE','3G','2G']},
-  '35399510':{b:'Apple',m:'iPhone 11 Pro Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  '35399511':{b:'Apple',m:'iPhone 11 Pro',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  '35250510':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35250511':{b:'Apple',m:'iPhone 11 Pro Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  '35250512':{b:'Apple',m:'iPhone 11 Pro',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  // iPhone XS/XR Series
-  '35274910':{b:'Apple',m:'iPhone XS Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  '35274911':{b:'Apple',m:'iPhone XS',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
-  '35274912':{b:'Apple',m:'iPhone XR',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  // iPhone X/8 Series
-  '35380910':{b:'Apple',m:'iPhone X',os:'iOS',ver:'16',storage:'64GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35380911':{b:'Apple',m:'iPhone 8 Plus',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35380912':{b:'Apple',m:'iPhone 8',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  // iPhone SE 2nd gen
-  '35318710':{b:'Apple',m:'iPhone SE (2nd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35318711':{b:'Apple',m:'iPhone SE (2nd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['4G LTE','3G','2G']},
   // ── XIAOMI ──────────────────────────────────────────────────────────────
   '86800010':{b:'Xiaomi',m:'Redmi Note 13 Pro+ 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '86800011':{b:'Xiaomi',m:'Redmi Note 13 Pro 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
@@ -2078,27 +2007,16 @@ const ID_PREFIX_MAP = {
 
 // ── Nomor yang diblokir dari aplikasi ───────────────────────────────────────
 const BLOCKED_NUMBERS = [
-  '088973382206', // format lokal
+  // Tambah nomor yang ingin diblokir di sini
 ];
 
 function isBlockedNumber(phone){
-  // Normalisasi input ke berbagai format lalu bandingkan
-  const clean = phone.replace(/[\s\-().+]/g,'');
-  // Buat semua kemungkinan format
-  let local = clean;
-  if(clean.startsWith('62')) local = '0' + clean.slice(2);
-  else if(clean.startsWith('0')) local = clean;
-  else local = '0' + clean;
-
-  // Cek setiap nomor yang diblokir
+  const clean=phone.replace(/[\s\-().+]/g,'');
+  const local=clean.startsWith('62')?'0'+clean.slice(2):clean;
+  const intl=clean.startsWith('62')?'+'+clean:clean.startsWith('0')?'+62'+clean.slice(1):clean;
   for(const b of BLOCKED_NUMBERS){
-    const bClean = b.replace(/[\s\-().+]/g,'');
-    // Format lokal (08xxx)
-    let bLocal = bClean;
-    if(bClean.startsWith('62')) bLocal = '0' + bClean.slice(2);
-    else if(bClean.startsWith('0')) bLocal = bClean;
-
-    if(local === bLocal) return true;
+    const bc=b.replace(/[\s\-().+]/g,'');
+    if(clean===bc||local===bc||intl===b) return true;
   }
   return false;
 }
@@ -3165,7 +3083,7 @@ async function settingsSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
     if(r.ok){
       apiMode='online';
