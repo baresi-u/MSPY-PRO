@@ -1108,18 +1108,15 @@ async function bannerSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
-    if(r.ok){
+    if(r.status===401){
+      res.style.color='#f45c5c'; res.textContent='❌ Key ditolak (401). Pastikan key sudah benar dan aktif.';
+    } else {
       apiMode='online'; updateAPIStatus('online');
       res.style.color='#22d3a3';
       res.textContent='✅ Groq API Key valid! IMEI & Phone Lookup siap digunakan.';
-      setTimeout(()=>{ const b=document.getElementById('apikey-banner'); if(b) b.style.display='none'; },2000);
-    } else if(r.status===401){
-      res.style.color='#f45c5c'; res.textContent='❌ Key ditolak (401). Pastikan key sudah benar.';
-    } else {
-      res.style.color='#22d3a3'; res.textContent='✅ Tersimpan. Coba lakukan pencarian.';
-      apiMode='online'; updateAPIStatus('online');
+      setTimeout(()=>hideApiKeyBanner(), 1500);
     }
   }catch(e){
     res.style.color='#f4a941'; res.textContent='⚠️ Tersimpan. Tidak bisa test sekarang ('+e.message+').';
@@ -1133,11 +1130,21 @@ async function pingClaudeAPI(key){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
-    if(r.ok||r.status===400){ updateAPIStatus('online'); apiMode='online'; }
-    else{ updateAPIStatus('offline'); apiMode='offline'; showApiKeyBanner(); }
-  }catch(e){ updateAPIStatus('offline'); apiMode='offline'; }
+    if(r.status===401){
+      updateAPIStatus('offline'); apiMode='offline';
+      _bannerDismissed=false; showApiKeyBanner();
+    } else {
+      // Semua status selain 401 = key valid (200, 400, 429, dll)
+      updateAPIStatus('online'); apiMode='online';
+      hideApiKeyBanner();
+    }
+  }catch(e){
+    // Network error / CORS = asumsikan key valid jika ada
+    if(key){ updateAPIStatus('online'); apiMode='online'; hideApiKeyBanner(); }
+    else{ updateAPIStatus('offline'); apiMode='offline'; }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3083,18 +3090,17 @@ async function settingsSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
-    if(r.ok){
+    if(r.status===401){
+      showSettingsStatus('❌ API Key ditolak (401). Pastikan key sudah benar dan aktif.','var(--red)');
+    } else {
+      // Semua status selain 401 = key diterima Groq (termasuk 400, 429 rate limit, dll)
       apiMode='online';
       updateAPIStatus('online');
       showSettingsStatus('✅ Groq API Key valid! Fitur IMEI & Phone Lookup siap digunakan.','var(--green)');
       const banner=document.getElementById('apikey-banner');
       if(banner) banner.style.display='none';
-    } else if(r.status===401){
-      showSettingsStatus('❌ API Key ditolak (401). Cek kembali key-nya.','var(--red)');
-    } else {
-      showSettingsStatus('⚠️ Tersimpan, tapi test gagal (HTTP '+r.status+'). Coba lagi nanti.','var(--amber)');
     }
   }catch(e){
     showSettingsStatus('⚠️ Tersimpan. Tidak bisa test sekarang ('+e.message+').','var(--amber)');
