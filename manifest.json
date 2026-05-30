@@ -1,0 +1,21 @@
+{
+  "name": "MSPY Pro — Pantau & Lacak",
+  "short_name": "MSPY Pro",
+  "description": "Sistem pemantauan perangkat dengan AI — IMEI, Phone Lookup, GPS real-time",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0d0f14",
+  "background_color": "#0d0f14",
+  "lang": "id",
+  "categories": ["utilities", "security"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
