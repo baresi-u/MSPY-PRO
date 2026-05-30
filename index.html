@@ -1129,7 +1129,7 @@ async function bannerSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
     if(r.ok){
       apiMode='online'; updateAPIStatus('online');
@@ -1160,7 +1160,7 @@ async function pingClaudeAPI(key){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
     if(r.ok){
       updateAPIStatus('online'); apiMode='online';
@@ -1196,7 +1196,7 @@ async function claudeRaw(messages, tools, system, maxTok=1500){
   if(!key.startsWith('gsk_')){ updateAPIStatus('offline'); _bannerDismissed=false; showApiKeyBanner(); throw new Error('Format API Key salah'); }
   const sysMsg=system?[{role:'system',content:system}]:[];
   const body={
-    model:'llama-3.3-70b-versatile',
+    model:'llama3-8b-8192',
     max_tokens:maxTok,
     messages:[...sysMsg,...messages]
   };
@@ -1454,6 +1454,30 @@ const TAC_DB = {
   '35300111':{b:'Apple',m:'iPhone 13 mini',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '35337110':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '35337111':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['5G','4G LTE','3G','2G']},
+  // iPhone 12 Series
+  '35227110':{b:'Apple',m:'iPhone 12 Pro Max',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
+  '35227111':{b:'Apple',m:'iPhone 12 Pro',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
+  '35228110':{b:'Apple',m:'iPhone 12',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
+  '35228111':{b:'Apple',m:'iPhone 12 mini',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
+  // iPhone 11 Series — TAC resmi dari GSMA
+  '35399410':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  '35399411':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['4G LTE','3G','2G']},
+  '35399510':{b:'Apple',m:'iPhone 11 Pro Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  '35399511':{b:'Apple',m:'iPhone 11 Pro',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  '35250510':{b:'Apple',m:'iPhone 11',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  '35250511':{b:'Apple',m:'iPhone 11 Pro Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  '35250512':{b:'Apple',m:'iPhone 11 Pro',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  // iPhone XS/XR Series
+  '35274910':{b:'Apple',m:'iPhone XS Max',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  '35274911':{b:'Apple',m:'iPhone XS',os:'iOS',ver:'16',storage:'64GB/256GB/512GB',country:'China',net:['4G LTE','3G','2G']},
+  '35274912':{b:'Apple',m:'iPhone XR',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  // iPhone X/8 Series
+  '35380910':{b:'Apple',m:'iPhone X',os:'iOS',ver:'16',storage:'64GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  '35380911':{b:'Apple',m:'iPhone 8 Plus',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  '35380912':{b:'Apple',m:'iPhone 8',os:'iOS',ver:'16',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  // iPhone SE 2nd gen
+  '35318710':{b:'Apple',m:'iPhone SE (2nd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
+  '35318711':{b:'Apple',m:'iPhone SE (2nd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['4G LTE','3G','2G']},
   // ── XIAOMI ──────────────────────────────────────────────────────────────
   '86800010':{b:'Xiaomi',m:'Redmi Note 13 Pro+ 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
   '86800011':{b:'Xiaomi',m:'Redmi Note 13 Pro 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
@@ -2054,16 +2078,27 @@ const ID_PREFIX_MAP = {
 
 // ── Nomor yang diblokir dari aplikasi ───────────────────────────────────────
 const BLOCKED_NUMBERS = [
-  // Tambah nomor yang ingin diblokir di sini
+  '088973382206', // format lokal
 ];
 
 function isBlockedNumber(phone){
-  const clean=phone.replace(/[\s\-().+]/g,'');
-  const local=clean.startsWith('62')?'0'+clean.slice(2):clean;
-  const intl=clean.startsWith('62')?'+'+clean:clean.startsWith('0')?'+62'+clean.slice(1):clean;
+  // Normalisasi input ke berbagai format lalu bandingkan
+  const clean = phone.replace(/[\s\-().+]/g,'');
+  // Buat semua kemungkinan format
+  let local = clean;
+  if(clean.startsWith('62')) local = '0' + clean.slice(2);
+  else if(clean.startsWith('0')) local = clean;
+  else local = '0' + clean;
+
+  // Cek setiap nomor yang diblokir
   for(const b of BLOCKED_NUMBERS){
-    const bc=b.replace(/[\s\-().+]/g,'');
-    if(clean===bc||local===bc||intl===b) return true;
+    const bClean = b.replace(/[\s\-().+]/g,'');
+    // Format lokal (08xxx)
+    let bLocal = bClean;
+    if(bClean.startsWith('62')) bLocal = '0' + bClean.slice(2);
+    else if(bClean.startsWith('0')) bLocal = bClean;
+
+    if(local === bLocal) return true;
   }
   return false;
 }
@@ -3130,7 +3165,7 @@ async function settingsSaveApiKey(){
     const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'llama-3.1-8b-instant',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+      body:JSON.stringify({model:'llama3-8b-8192',max_tokens:5,messages:[{role:'user',content:'hi'}]})
     });
     if(r.ok){
       apiMode='online';
