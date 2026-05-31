@@ -996,8 +996,13 @@ async function onIMEIInput(input){
 }
 
 async function lookupIMEIData(imei){
-  try{return await callClaudeAPI(buildIMEIPrompt(imei));}
-  catch(e){return simIMEI(imei);}
+  // Cek cache dulu
+  const cached = getIMEICache(imei);
+  if(cached) return cached;
+  // Panggil AI
+  const result = await agentIMEI(imei);
+  setIMEICache(imei, result);
+  return result;
 }
 
 function finishAddDevice(){
@@ -1189,36 +1194,44 @@ function extractJSON(text){
 async function agentIMEI(imei){
   const tac8=imei.slice(0,8);
   const tac6=imei.slice(0,6);
-  const sys=`Kamu adalah database TAC/IMEI yang sangat akurat. Identifikasi perangkat dari TAC dengan tepat.
-TAC 8-digit menentukan brand dan model secara unik — jangan menebak.
-Respons HARUS berupa JSON valid saja, tanpa teks apapun di luar JSON.`;
+  const luhn=validateLuhn(imei);
 
-  const userMsg=`Identifikasi perangkat dari IMEI ini:
+  const sys=`You are an expert IMEI/TAC database. Your job is to identify the exact device from a TAC (Type Allocation Code).
+Rules:
+- TAC is the first 8 digits of IMEI and uniquely identifies brand + model
+- You MUST respond with ONLY a valid JSON object, no markdown, no explanation, no extra text
+- Be as specific as possible about brand and model
+- Common TAC prefixes: 35xxxx = mostly Apple/Samsung/Google/Motorola/Nokia; 86xxxx = Xiaomi/OPPO/Vivo/Realme/OnePlus
+- Apple iPhone TACs start with 35 and the first 6 digits match known Apple TAC ranges
+- If you truly cannot identify the exact model, provide the most accurate brand you can determine`;
+
+  const userMsg=`Identify this device from IMEI:
 IMEI: ${imei}
-TAC 8-digit: ${tac8}
-TAC 6-digit: ${tac6}
+TAC (8-digit): ${tac8}
+TAC (6-digit): ${tac6}
+Luhn valid: ${luhn}
 
-Berikan HANYA JSON ini (tanpa markdown, tanpa penjelasan):
+Respond ONLY with this JSON (no markdown, no text outside JSON):
 {
   "valid": true,
-  "brand": "brand SEBENARNYA sesuai TAC",
-  "model": "model LENGKAP dan SPESIFIK",
-  "os": "Android atau iOS",
-  "osVersion": "versi OS terbaru yang didukung",
-  "releaseYear": "tahun rilis",
-  "storage": "opsi storage (mis: 128GB/256GB)",
+  "brand": "exact brand name",
+  "model": "exact and complete model name",
+  "os": "Android or iOS",
+  "osVersion": "latest supported OS version",
+  "releaseYear": "release year",
+  "storage": "storage options e.g. 128GB/256GB",
   "network": ["5G","4G LTE","3G","2G"],
-  "country": "negara manufaktur",
+  "country": "manufacturing country",
   "status": "Clean",
   "warrantyStatus": "Out of Warranty",
-  "color": "pilihan warna",
+  "color": "available colors",
   "tac": "${tac8}",
   "snr": "${imei.slice(8,14)}",
   "checkDigit": "${imei.slice(14)}",
-  "luhnValid": ${validateLuhn(imei)},
+  "luhnValid": ${luhn},
   "riskLevel": "Low",
-  "sourceNote": "database TAC",
-  "notes": "spesifikasi utama: chipset, RAM, kamera, baterai"
+  "sourceNote": "AI TAC database",
+  "notes": "key specs in Indonesian: chipset, RAM, camera, battery"
 }`;
 
   const msgs=[{role:'user',content:userMsg}];
@@ -1298,35 +1311,35 @@ function updateAPIStatus(mode){
 function buildIMEIPrompt(imei){
   const tac8=imei.slice(0,8);
   const tac6=imei.slice(0,6);
-  return `Kamu adalah database IMEI/TAC profesional. Identifikasi perangkat dari IMEI: ${imei}
-TAC 8-digit: ${tac8} | TAC 6-digit: ${tac6}
+  const luhn=validateLuhn(imei);
+  return `You are an expert IMEI/TAC database. Identify the device from IMEI: ${imei}
+TAC 8-digit: ${tac8} | TAC 6-digit: ${tac6} | Luhn valid: ${luhn}
 
-Gunakan pengetahuanmu tentang database TAC GSMA untuk mengidentifikasi brand dan model yang TEPAT dan SPESIFIK.
-TAC menentukan brand + model, SNR (digit 7-14) adalah nomor seri, digit terakhir adalah check digit.
+Use your GSMA TAC knowledge to identify the EXACT brand and model.
+TAC uniquely identifies brand + model. Do NOT guess randomly.
+Common prefixes: 35xxxx = Apple/Samsung/Google/Motorola; 86xxxx = Xiaomi/OPPO/Vivo/Realme
 
-JANGAN menebak secara acak. Jika tidak yakin modelnya, sebutkan setidaknya brand yang benar berdasarkan TAC prefix.
-Prefix TAC umum: 35xxxx=mayoritas brand (Samsung/Apple/dll), 86xxxx=Xiaomi/brand China, 99xxxx=brand tertentu.
-
-Berikan HANYA JSON ini (tanpa teks lain, tanpa backtick markdown):
+Respond ONLY with this JSON (no markdown, no text outside JSON):
 {
   "valid": true,
-  "brand": "brand yang tepat sesuai TAC ${tac6}",
-  "model": "model spesifik dan lengkap",
-  "os": "Android atau iOS",
-  "osVersion": "versi OS terbaru yang didukung perangkat ini",
-  "releaseYear": "tahun rilis",
-  "storage": "opsi storage tersedia mis: 128GB/256GB",
+  "brand": "exact brand for TAC ${tac6}",
+  "model": "specific and complete model name",
+  "os": "Android or iOS",
+  "osVersion": "latest supported OS version",
+  "releaseYear": "release year",
+  "storage": "storage options e.g. 128GB/256GB",
   "network": ["5G","4G LTE","3G","2G"],
-  "country": "negara manufaktur aktual",
+  "country": "actual manufacturing country",
   "status": "Clean",
   "warrantyStatus": "Out of Warranty",
-  "color": "pilihan warna",
+  "color": "available colors",
   "tac": "${tac8}",
   "snr": "${imei.slice(8,14)}",
   "checkDigit": "${imei.slice(14)}",
-  "luhnValid": ${validateLuhn(imei)},
+  "luhnValid": ${luhn},
   "riskLevel": "Low",
-  "notes": "spesifikasi utama dalam bahasa Indonesia: chipset, RAM, kamera, baterai"
+  "sourceNote": "AI TAC database",
+  "notes": "key specs in Indonesian: chipset, RAM, camera, battery"
 }`;
 }
 
@@ -1364,269 +1377,31 @@ function simHash(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.cha
 
 // Database TAC mapping — berdasarkan data TAC GSMA/IMEI.info
 // Format: TAC 8-digit (lebih akurat) dan 6-digit fallback
-const TAC_DB = {
-  // ── SAMSUNG ─────────────────────────────────────────────────────────────
-  '35344110':{b:'Samsung',m:'Galaxy S23 Ultra',os:'Android',ver:'14',storage:'256GB/512GB/1TB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35344111':{b:'Samsung',m:'Galaxy S23 Ultra',os:'Android',ver:'14',storage:'256GB/512GB',country:'South Korea',net:['5G','4G LTE','3G','2G']},
-  '35345110':{b:'Samsung',m:'Galaxy S23+',os:'Android',ver:'14',storage:'256GB/512GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35345111':{b:'Samsung',m:'Galaxy S23',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35448110':{b:'Samsung',m:'Galaxy S24 Ultra',os:'Android',ver:'14',storage:'256GB/512GB/1TB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35448111':{b:'Samsung',m:'Galaxy S24+',os:'Android',ver:'14',storage:'256GB/512GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35448112':{b:'Samsung',m:'Galaxy S24',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35356110':{b:'Samsung',m:'Galaxy S22 Ultra',os:'Android',ver:'14',storage:'128GB/256GB/512GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35356111':{b:'Samsung',m:'Galaxy S22+',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35356112':{b:'Samsung',m:'Galaxy S22',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35386110':{b:'Samsung',m:'Galaxy A54 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35387110':{b:'Samsung',m:'Galaxy A34 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35247110':{b:'Samsung',m:'Galaxy A14 5G',os:'Android',ver:'14',storage:'64GB/128GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35247111':{b:'Samsung',m:'Galaxy A14',os:'Android',ver:'13',storage:'64GB/128GB',country:'Vietnam',net:['4G LTE','3G','2G']},
-  '35260110':{b:'Samsung',m:'Galaxy M34 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35261110':{b:'Samsung',m:'Galaxy A53 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35334110':{b:'Samsung',m:'Galaxy A24',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['4G LTE','3G','2G']},
-  '35362110':{b:'Samsung',m:'Galaxy A04s',os:'Android',ver:'13',storage:'32GB/64GB/128GB',country:'Vietnam',net:['4G LTE','3G','2G']},
-  '35363110':{b:'Samsung',m:'Galaxy A04e',os:'Android',ver:'13',storage:'32GB/64GB',country:'Vietnam',net:['4G LTE','3G','2G']},
-  '35413110':{b:'Samsung',m:'Galaxy A15 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35413111':{b:'Samsung',m:'Galaxy A15',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['4G LTE','3G','2G']},
-  '35414110':{b:'Samsung',m:'Galaxy A25 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35415110':{b:'Samsung',m:'Galaxy A35 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35416110':{b:'Samsung',m:'Galaxy A55 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35429110':{b:'Samsung',m:'Galaxy M15 5G',os:'Android',ver:'14',storage:'128GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35285110':{b:'Samsung',m:'Galaxy M53 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  // ── APPLE ───────────────────────────────────────────────────────────────
-  '35177110':{b:'Apple',m:'iPhone 15 Pro Max',os:'iOS',ver:'18',storage:'256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35177111':{b:'Apple',m:'iPhone 15 Pro Max',os:'iOS',ver:'18',storage:'256GB/512GB/1TB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35178110':{b:'Apple',m:'iPhone 15 Pro',os:'iOS',ver:'18',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35179110':{b:'Apple',m:'iPhone 15 Plus',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35180110':{b:'Apple',m:'iPhone 15',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35180111':{b:'Apple',m:'iPhone 15',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35293110':{b:'Apple',m:'iPhone 16 Pro Max',os:'iOS',ver:'18',storage:'256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35293111':{b:'Apple',m:'iPhone 16 Pro',os:'iOS',ver:'18',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35294110':{b:'Apple',m:'iPhone 16 Plus',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35294111':{b:'Apple',m:'iPhone 16',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35181110':{b:'Apple',m:'iPhone 14 Pro Max',os:'iOS',ver:'18',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35182110':{b:'Apple',m:'iPhone 14 Pro',os:'iOS',ver:'18',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35183110':{b:'Apple',m:'iPhone 14 Plus',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35184110':{b:'Apple',m:'iPhone 14',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35184111':{b:'Apple',m:'iPhone 14',os:'iOS',ver:'18',storage:'128GB/256GB/512GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35299110':{b:'Apple',m:'iPhone 13 Pro Max',os:'iOS',ver:'17',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35299111':{b:'Apple',m:'iPhone 13 Pro',os:'iOS',ver:'17',storage:'128GB/256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35300110':{b:'Apple',m:'iPhone 13',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35300111':{b:'Apple',m:'iPhone 13 mini',os:'iOS',ver:'17',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35337110':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35337111':{b:'Apple',m:'iPhone SE (3rd gen)',os:'iOS',ver:'17',storage:'64GB/128GB/256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  // ── XIAOMI ──────────────────────────────────────────────────────────────
-  '86800010':{b:'Xiaomi',m:'Redmi Note 13 Pro+ 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86800011':{b:'Xiaomi',m:'Redmi Note 13 Pro 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86800012':{b:'Xiaomi',m:'Redmi Note 13 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86800013':{b:'Xiaomi',m:'Redmi Note 13',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86880010':{b:'Xiaomi',m:'Redmi Note 12 Pro+ 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86880011':{b:'Xiaomi',m:'Redmi Note 12 Pro 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86880012':{b:'Xiaomi',m:'Redmi Note 12 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86880013':{b:'Xiaomi',m:'Redmi Note 12',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86881010':{b:'Xiaomi',m:'Poco X5 Pro 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86881011':{b:'Xiaomi',m:'Poco X5 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86811010':{b:'Xiaomi',m:'Redmi 12C',os:'Android',ver:'12',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86807010':{b:'Xiaomi',m:'Poco M5',os:'Android',ver:'12',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86809010':{b:'Xiaomi',m:'Poco M5s',os:'Android',ver:'12',storage:'64GB/128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86812010':{b:'Xiaomi',m:'Redmi 12',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86812011':{b:'Xiaomi',m:'Redmi 12 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86813010':{b:'Xiaomi',m:'Poco X6 Pro 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86813011':{b:'Xiaomi',m:'Poco X6 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86814010':{b:'Xiaomi',m:'Xiaomi 14 Pro',os:'Android',ver:'14',storage:'256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86814011':{b:'Xiaomi',m:'Xiaomi 14',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86815010':{b:'Xiaomi',m:'Redmi Note 12 Turbo',os:'Android',ver:'13',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86816010':{b:'Xiaomi',m:'Poco F5 Pro',os:'Android',ver:'13',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86816011':{b:'Xiaomi',m:'Poco F5',os:'Android',ver:'13',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── OPPO ────────────────────────────────────────────────────────────────
-  '86600010':{b:'OPPO',m:'Reno 11 Pro 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86600011':{b:'OPPO',m:'Reno 11 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86600012':{b:'OPPO',m:'Reno 11F 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35349110':{b:'OPPO',m:'Reno 10 Pro+ 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35349111':{b:'OPPO',m:'Reno 10 Pro 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35349112':{b:'OPPO',m:'Reno 10 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86889010':{b:'OPPO',m:'A78 5G',os:'Android',ver:'12',storage:'128GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86889011':{b:'OPPO',m:'A78',os:'Android',ver:'12',storage:'128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86890010':{b:'OPPO',m:'A58 5G',os:'Android',ver:'13',storage:'128GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86891010':{b:'OPPO',m:'A38',os:'Android',ver:'13',storage:'128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86892010':{b:'OPPO',m:'A98 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86893010':{b:'OPPO',m:'Find X7 Ultra',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86893011':{b:'OPPO',m:'Find X7 Pro',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86893012':{b:'OPPO',m:'Find X7',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── VIVO ────────────────────────────────────────────────────────────────
-  '35354110':{b:'Vivo',m:'V29 Pro 5G',os:'Android',ver:'14',storage:'256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '35354111':{b:'Vivo',m:'V29 5G',os:'Android',ver:'14',storage:'256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '86890010':{b:'Vivo',m:'Y36 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86894010':{b:'Vivo',m:'V27 Pro 5G',os:'Android',ver:'13',storage:'256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '86894011':{b:'Vivo',m:'V27 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86895010':{b:'Vivo',m:'X100 Pro',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86895011':{b:'Vivo',m:'X100',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86896010':{b:'Vivo',m:'Y100 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86897010':{b:'Vivo',m:'T2 Pro 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── REALME ──────────────────────────────────────────────────────────────
-  '35298110':{b:'Realme',m:'C55',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35334110':{b:'Realme',m:'11 Pro+ 5G',os:'Android',ver:'13',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35334111':{b:'Realme',m:'11 Pro 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35335110':{b:'Realme',m:'12 Pro+ 5G',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35335111':{b:'Realme',m:'12 Pro 5G',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86898010':{b:'Realme',m:'GT 5 Pro',os:'Android',ver:'14',storage:'256GB/512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86898011':{b:'Realme',m:'GT 5',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86899010':{b:'Realme',m:'C67 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86899011':{b:'Realme',m:'C67',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86900010':{b:'Realme',m:'Narzo 70 Pro 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // Realme TAC 860068xx — berdasarkan data GSMA/imei.info
-  '86006807':{b:'Realme',m:'C75',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006806':{b:'Realme',m:'C75',os:'Android',ver:'14',storage:'128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006805':{b:'Realme',m:'C63',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006804':{b:'Realme',m:'C61',os:'Android',ver:'14',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006803':{b:'Realme',m:'C53',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006802':{b:'Realme',m:'C51',os:'Android',ver:'13',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006801':{b:'Realme',m:'C35',os:'Android',ver:'13',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006800':{b:'Realme',m:'C33',os:'Android',ver:'12',storage:'32GB/64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006810':{b:'Realme',m:'Narzo N65 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'India',net:['5G','4G LTE','3G','2G']},
-  '86006811':{b:'Realme',m:'Narzo N55',os:'Android',ver:'13',storage:'64GB/128GB',country:'India',net:['4G LTE','3G','2G']},
-  '86006820':{b:'Realme',m:'10 Pro+ 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006821':{b:'Realme',m:'10 Pro 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006822':{b:'Realme',m:'10',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006830':{b:'Realme',m:'9 Pro+ 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006831':{b:'Realme',m:'9 Pro 5G',os:'Android',ver:'13',storage:'128GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006832':{b:'Realme',m:'9i',os:'Android',ver:'13',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  '86006840':{b:'Realme',m:'GT Neo 6 SE',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006841':{b:'Realme',m:'GT Neo 5 SE',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006850':{b:'Realme',m:'12+',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86006851':{b:'Realme',m:'12x 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── INFINIX ─────────────────────────────────────────────────────────────
-  '35263110':{b:'Infinix',m:'Note 30 Pro 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35263111':{b:'Infinix',m:'Note 30 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35263112':{b:'Infinix',m:'Note 30',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35264110':{b:'Infinix',m:'Hot 40 Pro',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35264111':{b:'Infinix',m:'Hot 40i',os:'Android',ver:'13',storage:'128GB',country:'China',net:['4G LTE','3G','2G']},
-  '35265110':{b:'Infinix',m:'Zero 30 5G',os:'Android',ver:'13',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35266110':{b:'Infinix',m:'Smart 8 Pro',os:'Android',ver:'13',storage:'64GB/128GB',country:'China',net:['4G LTE','3G','2G']},
-  // ── MOTOROLA ────────────────────────────────────────────────────────────
-  '35191110':{b:'Motorola',m:'Edge 40 Pro',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35191111':{b:'Motorola',m:'Edge 40',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35192110':{b:'Motorola',m:'Moto G84 5G',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35192111':{b:'Motorola',m:'Moto G54 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35193110':{b:'Motorola',m:'Razr 40 Ultra',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35193111':{b:'Motorola',m:'Razr 40',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35194110':{b:'Motorola',m:'Moto G73 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35194111':{b:'Motorola',m:'Moto G53 5G',os:'Android',ver:'13',storage:'128GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── GOOGLE PIXEL ────────────────────────────────────────────────────────
-  '35292110':{b:'Google',m:'Pixel 8 Pro',os:'Android',ver:'14',storage:'128GB/256GB/512GB/1TB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35292111':{b:'Google',m:'Pixel 8',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35292112':{b:'Google',m:'Pixel 8a',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35289110':{b:'Google',m:'Pixel 7 Pro',os:'Android',ver:'14',storage:'128GB/256GB/512GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35289111':{b:'Google',m:'Pixel 7',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  '35290110':{b:'Google',m:'Pixel 7a',os:'Android',ver:'14',storage:'128GB',country:'Vietnam',net:['5G','4G LTE','3G','2G']},
-  // ── ONEPLUS ─────────────────────────────────────────────────────────────
-  '86700010':{b:'OnePlus',m:'12 Pro',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86700011':{b:'OnePlus',m:'12',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86701010':{b:'OnePlus',m:'Nord 3 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86701011':{b:'OnePlus',m:'Nord CE 3 5G',os:'Android',ver:'13',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86702010':{b:'OnePlus',m:'11 Pro',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '86702011':{b:'OnePlus',m:'11',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── ASUS ────────────────────────────────────────────────────────────────
-  '35245110':{b:'ASUS',m:'ROG Phone 8 Pro',os:'Android',ver:'14',storage:'512GB/1TB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35245111':{b:'ASUS',m:'ROG Phone 8',os:'Android',ver:'14',storage:'256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  '35246110':{b:'ASUS',m:'Zenfone 10',os:'Android',ver:'14',storage:'128GB/256GB/512GB',country:'China',net:['5G','4G LTE','3G','2G']},
-  // ── TECNO ────────────────────────────────────────────────────────────────
-  '35267110':{b:'Tecno',m:'Spark 20 Pro+',os:'Android',ver:'14',storage:'256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35267111':{b:'Tecno',m:'Spark 20 Pro',os:'Android',ver:'14',storage:'128GB/256GB',country:'China',net:['4G LTE','3G','2G']},
-  '35268110':{b:'Tecno',m:'Camon 30 Pro 5G',os:'Android',ver:'14',storage:'256GB',country:'China',net:['5G','4G LTE','3G','2G']},
+// ══════════════════════════════════════════════════════════════
+// IMEI ENGINE — AI-First, Cache-Second
+// TAC_DB statis dihapus → semua lookup lewat Groq AI
+// ══════════════════════════════════════════════════════════════
 
-  // ── 6-DIGIT FALLBACK (jika 8-digit tidak match) ──────────────────────────
-  '353441':{b:'Samsung',m:'Galaxy S23 Series',os:'Android',ver:'14',storage:'256GB+',country:'Vietnam'},
-  '354481':{b:'Samsung',m:'Galaxy S24 Series',os:'Android',ver:'14',storage:'128GB+',country:'Vietnam'},
-  '353861':{b:'Samsung',m:'Galaxy A54 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam'},
-  '353871':{b:'Samsung',m:'Galaxy A34 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam'},
-  '352471':{b:'Samsung',m:'Galaxy A14',os:'Android',ver:'14',storage:'64GB/128GB',country:'Vietnam'},
-  '354131':{b:'Samsung',m:'Galaxy A15 Series',os:'Android',ver:'14',storage:'128GB',country:'Vietnam'},
-  '354141':{b:'Samsung',m:'Galaxy A25 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam'},
-  '354151':{b:'Samsung',m:'Galaxy A35 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam'},
-  '354161':{b:'Samsung',m:'Galaxy A55 5G',os:'Android',ver:'14',storage:'128GB/256GB',country:'Vietnam'},
-  '351771':{b:'Apple',m:'iPhone 15 Pro Max',os:'iOS',ver:'18',storage:'256GB+',country:'China'},
-  '351781':{b:'Apple',m:'iPhone 15 Pro',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '351791':{b:'Apple',m:'iPhone 15 Plus',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '351801':{b:'Apple',m:'iPhone 15',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '352931':{b:'Apple',m:'iPhone 16 Series',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '351811':{b:'Apple',m:'iPhone 14 Pro Max',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '351821':{b:'Apple',m:'iPhone 14 Pro',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '351841':{b:'Apple',m:'iPhone 14',os:'iOS',ver:'18',storage:'128GB+',country:'China'},
-  '352991':{b:'Apple',m:'iPhone 13 Pro',os:'iOS',ver:'17',storage:'128GB+',country:'China'},
-  '353001':{b:'Apple',m:'iPhone 13',os:'iOS',ver:'17',storage:'128GB+',country:'China'},
-  '868000':{b:'Xiaomi',m:'Redmi Note 13 Series',os:'Android',ver:'14',storage:'128GB+',country:'China'},
-  '868800':{b:'Xiaomi',m:'Redmi Note 12 Series',os:'Android',ver:'13',storage:'128GB+',country:'China'},
-  '868810':{b:'Xiaomi',m:'Poco X5 Series',os:'Android',ver:'13',storage:'128GB+',country:'China'},
-  '868130':{b:'Xiaomi',m:'Poco X6 Series',os:'Android',ver:'14',storage:'256GB+',country:'China'},
-  '868140':{b:'Xiaomi',m:'Xiaomi 14 Series',os:'Android',ver:'14',storage:'256GB+',country:'China'},
-  '868160':{b:'Xiaomi',m:'Poco F5 Series',os:'Android',ver:'13',storage:'256GB+',country:'China'},
-  '866000':{b:'OPPO',m:'Reno 11 Series',os:'Android',ver:'14',storage:'128GB+',country:'China'},
-  '353491':{b:'OPPO',m:'Reno 10 Series',os:'Android',ver:'13',storage:'128GB+',country:'China'},
-  '353351':{b:'Realme',m:'12 Pro Series',os:'Android',ver:'14',storage:'256GB+',country:'China'},
-  '352631':{b:'Infinix',m:'Note 30 Series',os:'Android',ver:'13',storage:'128GB+',country:'China'},
-  '351911':{b:'Motorola',m:'Edge 40 Series',os:'Android',ver:'14',storage:'256GB',country:'China'},
-  '351921':{b:'Motorola',m:'Moto G Series',os:'Android',ver:'14',storage:'128GB+',country:'China'},
-  '352921':{b:'Google',m:'Pixel 8 Series',os:'Android',ver:'14',storage:'128GB+',country:'Vietnam'},
-  '352891':{b:'Google',m:'Pixel 7 Series',os:'Android',ver:'14',storage:'128GB+',country:'Vietnam'},
-  '867000':{b:'OnePlus',m:'OnePlus 12 Series',os:'Android',ver:'14',storage:'256GB+',country:'China'},
-  '867010':{b:'OnePlus',m:'OnePlus Nord Series',os:'Android',ver:'14',storage:'128GB+',country:'China'},
-};
-
-function simIMEI(imei){
-  const h=simHash(imei);
-  const tac8=imei.slice(0,8);
-  const tac6=imei.slice(0,6);
-  const tac5=imei.slice(0,5);
-
-  // Coba match TAC 8-digit dulu (paling akurat), lalu 6-digit, lalu 5-digit
-  let dev=TAC_DB[tac8]||TAC_DB[tac6]||TAC_DB[tac5];
-
-  if(!dev){
-    // Fallback berdasarkan prefix brand TAC umum
-    const p2=imei.slice(0,2);
-    const brands=[
-      {b:'Samsung',models:['Galaxy A55 5G','Galaxy A35 5G','Galaxy A15 5G','Galaxy S23','Galaxy A54 5G'],os:'Android',ver:'14',country:'Vietnam'},
-      {b:'Xiaomi',models:['Redmi Note 13 5G','Poco X6 Pro','Redmi Note 12','Poco M6 Pro','Redmi 13C'],os:'Android',ver:'14',country:'China'},
-      {b:'OPPO',models:['Reno 11 F','A98 5G','A78 5G','Reno 10','Find X7'],os:'Android',ver:'14',country:'China'},
-      {b:'Vivo',models:['V29 5G','Y100 5G','V27 Pro','X100','T2 Pro 5G'],os:'Android',ver:'14',country:'China'},
-      {b:'Realme',models:['12 Pro+ 5G','C67','GT 5','Narzo 70 Pro','C55'],os:'Android',ver:'14',country:'China'},
-      {b:'Apple',models:['iPhone 15','iPhone 15 Pro','iPhone 14','iPhone 13','iPhone 15 Plus'],os:'iOS',ver:'18',country:'China'},
-      {b:'Infinix',models:['Note 30 5G','Hot 40 Pro','Zero 30 5G','Smart 8 Pro','Note 30'],os:'Android',ver:'13',country:'China'},
-      {b:'Motorola',models:['Edge 40','Moto G84 5G','Razr 40','Moto G54 5G','Moto G73 5G'],os:'Android',ver:'14',country:'China'},
-    ];
-    const storages=['64GB','128GB','128GB','256GB','256GB'];
-    const bd=p2==='35'?brands[h%4]:p2==='86'?brands[1+(h%4)]:brands[h%brands.length];
-    dev={
-      b:bd.b,
-      m:bd.models[(h>>3)%bd.models.length],
-      os:bd.os,
-      ver:bd.ver,
-      storage:storages[(h>>7)%storages.length],
-      country:bd.country,
-      net:['5G','4G LTE','3G','2G']
-    };
-  }
-
-  const statuses=['Clean','Clean','Clean','Clean','Clean','Unknown'];
-  const years=['2022','2023','2023','2024','2024'];
-  const colors=['Midnight Black','Phantom Black','Arctic White','Sage Green','Lavender','Graphite'];
-  const luhn=validateLuhn(imei);
-
-  return {
-    valid:true,brand:dev.b,model:dev.m,os:dev.os,osVersion:dev.ver,
-    releaseYear:years[(h>>5)%years.length],
-    storage:dev.storage,
-    network:dev.net||['5G','4G LTE','3G','2G'],
-    country:dev.country,
-    status:statuses[(h>>11)%statuses.length],
-    warrantyStatus:(h>>13)%4===0?'In Warranty':'Out of Warranty',
-    color:colors[(h>>15)%colors.length],
-    tac:tac8,snr:imei.slice(8,14),checkDigit:imei.slice(14),
-    luhnValid:luhn,
-    riskLevel:'Low',
-    notes:`Perangkat ${dev.b} ${dev.m} — TAC ${tac8}. ${luhn?'Nomor IMEI valid (Luhn check passed).':'⚠️ Periksa kembali nomor IMEI.'} Data dari simulasi lokal — untuk hasil lebih akurat hubungkan ke Claude AI.`
-  };
+// Cache hasil AI — disimpan di localStorage
+const IMEI_CACHE_KEY = 'mspy_imei_cache';
+function getIMEICache(imei){
+  try{
+    const c=JSON.parse(localStorage.getItem(IMEI_CACHE_KEY)||'{}');
+    return c[imei]||null;
+  }catch(e){return null;}
 }
+function setIMEICache(imei,result){
+  try{
+    const c=JSON.parse(localStorage.getItem(IMEI_CACHE_KEY)||'{}');
+    c[imei]=result;
+    const keys=Object.keys(c);
+    if(keys.length>100) delete c[keys[0]];
+    localStorage.setItem(IMEI_CACHE_KEY,JSON.stringify(c));
+  }catch(e){}
+}
+
+// simHash tetap dipakai untuk Luhn & phone sim
+function simHash(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
 
 function validateLuhn(imei){
   let sum=0,alt=false;
@@ -2273,25 +2048,41 @@ async function searchIMEI(){
 
   let result, isSimulation=false;
 
-  // Prioritas 1: TAC_DB lokal dulu (data GSMA nyata, paling akurat)
-  const _tac8=imei.slice(0,8),_tac6=imei.slice(0,6),_tac5=imei.slice(0,5);
-  const _localDev=TAC_DB[_tac8]||TAC_DB[_tac6]||TAC_DB[_tac5];
-
-  if(_localDev){
-    // Langsung pakai database lokal — tidak perlu AI
-    result=simIMEI(imei);
-    isSimulation=false;
-    result._sim=false;
-    result.sourceNote='Database TAC terverifikasi (GSMA-based)';
-    result.notes=result.notes.replace('Data dari simulasi lokal —','Data dari database TAC terverifikasi —');
+  // ── AI-First: cek cache dulu, kalau tidak ada → Groq AI
+  const _cached = getIMEICache(imei);
+  if(_cached){
+    result = _cached;
+    result._fromCache = true;
+    isSimulation = false;
   } else {
-    // TAC tidak ada di lokal — panggil AI
     try{
-      result=await agentIMEI(imei);
-      isSimulation=false;
+      result = await agentIMEI(imei);
+      isSimulation = false;
+      setIMEICache(imei, result);
     }catch(agentErr){
-      try{result=await callClaudeAPI(buildIMEIPrompt(imei));isSimulation=false;}
-      catch(e2){result=simIMEI(imei);isSimulation=true;}
+      // Fallback ke buildIMEIPrompt (prompt alternatif)
+      try{
+        result = await callClaudeAPI(buildIMEIPrompt(imei));
+        isSimulation = false;
+        setIMEICache(imei, result);
+      }catch(e2){
+        // Gagal total — tampilkan pesan error, BUKAN tebakan acak
+        result = {
+          valid: false,
+          brand: 'Tidak Diketahui',
+          model: 'Tidak dapat diidentifikasi',
+          os: '—', osVersion: '—', releaseYear: '—',
+          storage: '—', network: [], country: '—',
+          status: 'Unknown', warrantyStatus: '—',
+          color: '—', tac: imei.slice(0,8),
+          snr: imei.slice(8,14), checkDigit: imei.slice(14),
+          luhnValid: validateLuhn(imei),
+          riskLevel: 'Unknown',
+          _error: true,
+          notes: '⚠️ Tidak dapat mengidentifikasi IMEI ini. Pastikan API Key Groq sudah diisi dan koneksi internet aktif. IMEI: '+imei+' | TAC: '+imei.slice(0,8)
+        };
+        isSimulation = true;
+      }
     }
   }
   clearInterval(timer);clearInterval(textTimer);
@@ -2314,7 +2105,12 @@ function renderIMEIResult(imei,r){
 
   document.getElementById('imei-result').innerHTML=`
     <div class="result-card">
-      ${r._sim?'<div style="font-size:11px;background:rgba(244,169,65,.1);border:1px solid rgba(244,169,65,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:var(--amber)">⚠️ Mode simulasi lokal — Claude API tidak terhubung. Data merupakan estimasi.</div>':r.sourceNote?'<div style="font-size:11px;background:rgba(34,211,163,.1);border:1px solid rgba(34,211,163,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:var(--green)">✅ Data dari AI Agent · Sumber: '+r.sourceNote+'</div>':'<div style="font-size:11px;background:rgba(59,126,248,.1);border:1px solid rgba(59,126,248,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:#6ba3ff">🤖 Dianalisis oleh Claude AI Agent</div>'}
+      ${r._error
+        ? '<div style="font-size:11px;background:rgba(244,92,92,.1);border:1px solid rgba(244,92,92,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:var(--red)">❌ Gagal mengidentifikasi — pastikan API Key Groq valid dan internet aktif.</div>'
+        : r._fromCache
+          ? '<div style="font-size:11px;background:rgba(155,114,244,.1);border:1px solid rgba(155,114,244,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:var(--purple)">⚡ Dari cache — hasil AI yang tersimpan sebelumnya</div>'
+          : '<div style="font-size:11px;background:rgba(34,211,163,.1);border:1px solid rgba(34,211,163,.25);border-radius:6px;padding:6px 10px;margin-bottom:10px;color:var(--green)">🤖 Dianalisis langsung oleh Groq AI · TAC: '+r.tac+'</div>'
+      }
       <div class="result-header">
         <div class="result-icon" style="background:rgba(59,126,248,.15)">${osIcon}</div>
         <div>
